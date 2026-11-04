@@ -15,7 +15,7 @@ describe('configuração', () => {
     ).toThrow('Simulação'));
   it('exige configuração real', () =>
     expect(() => validateConfig({ WEBHOOK_TOKEN: 'test' })).toThrow(
-      'REDIS_URL',
+      'BACKEND_URL',
     ));
   it('recusa porta inválida', () =>
     expect(() =>

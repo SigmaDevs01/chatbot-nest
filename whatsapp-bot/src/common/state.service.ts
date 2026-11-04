@@ -13,7 +13,7 @@ import { setTimeout as delay } from 'timers/promises';
 
 /**
  * Persistência compartilhada e coordenação das conversas.
- * No modo real, usa uma conexão Redis; na simulação sem REDIS_URL, usa memória.
+ * No modo real com Redis, usa uma conexão Redis; sem REDIS_URL, usa memória local.
  * AsyncLocalStorage mantém as alterações pendentes e o dono do bloqueio separados
  * entre requisições concorrentes. O contexto existe apenas durante a operação.
  * Veja docs/ARQUITETURA.md para a ordem entre persistência e efeitos externos.
@@ -34,22 +34,28 @@ export class StateService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(StateService.name);
   constructor(private readonly config: ConfigService) {}
   /**
-   * Conecta antes de aceitar tráfego. Falha de Redis não vira fallback em memória.
-   * A conexão não reconecta automaticamente: recuperar o serviço requer reinício.
+   * Conecta antes de aceitar tráfego. Se REDIS_URL for omitido ou falhar, utiliza memória.
    */
   async onModuleInit() {
     const url = this.config.get<string>('REDIS_URL');
-    if (url) {
-      this.client = createClient({
-        url,
-        disableOfflineQueue: true,
-        socket: { connectTimeout: 5000, reconnectStrategy: false },
-      });
-      this.client.on('error', () => this.logger.error('Redis indisponível'));
-      await this.client.connect();
+    if (url && url.trim()) {
+      try {
+        this.client = createClient({
+          url,
+          disableOfflineQueue: true,
+          socket: { connectTimeout: 5000, reconnectStrategy: false },
+        });
+        this.client.on('error', () => this.logger.error('Redis indisponível'));
+        await this.client.connect();
+        this.logger.log(`Conectado ao Redis com sucesso (${url}).`);
+      } catch (err: any) {
+        this.logger.warn(`Falha ao conectar no Redis (${url}). Utilizando persistência em memória.`);
+        this.client = undefined;
+        this.cleanup = setInterval(() => this.sweep(), 60000);
+        this.cleanup.unref();
+      }
     } else {
-      if (this.config.get('SIMULATION_MODE') !== 'true')
-        throw new Error('REDIS_URL obrigatória');
+      this.logger.log('REDIS_URL não informada: utilizando persistência de sessão em memória.');
       this.cleanup = setInterval(() => this.sweep(), 60000);
       this.cleanup.unref();
     }
@@ -102,7 +108,7 @@ export class StateService implements OnModuleInit, OnModuleDestroy {
     }
     this.sweep();
     if (!this.memory.has(key) && this.memory.size >= 10000)
-      throw new ServiceUnavailableException('Limite da simulação');
+      throw new ServiceUnavailableException('Limite da persistência em memória excedido');
     this.memory.set(key, { value: encoded, expires: Date.now() + ttlMs });
   }
   /** null no lote representa remoção; fora de uma transação, remove imediatamente. */
@@ -165,7 +171,7 @@ export class StateService implements OnModuleInit, OnModuleDestroy {
         if (entry.value !== null && !this.memory.has(key)) count++;
       }
       if (count > 10000)
-        throw new ServiceUnavailableException('Limite da simulação');
+        throw new ServiceUnavailableException('Limite da persistência em memória excedido');
       for (const [key, entry] of changes) {
         if (entry.value === null) this.memory.delete(key);
         else

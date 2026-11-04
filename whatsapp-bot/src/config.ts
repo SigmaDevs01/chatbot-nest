@@ -17,22 +17,17 @@ export function validateConfig(env: Record<string, unknown>) {
   const simulation = config.SIMULATION_MODE === 'true';
   if (config.NODE_ENV === 'production' && simulation)
     throw new Error('Simulação proibida em produção');
-  // A simulação também exige autenticação no webhook local.
+
+  // Variáveis essenciais para processar webhooks e encaminhar ao backend
   const required = ['WEBHOOK_TOKEN'];
   if (!simulation) {
     required.push(
-      'REDIS_URL',
       'BACKEND_URL',
       'BOT_API_KEY',
       'EVOLUTION_URL',
       'EVOLUTION_INSTANCE',
       'EVOLUTION_APIKEY',
-      'SUPABASE_URL',
-      'SUPABASE_SERVICE_ROLE_KEY',
-      'SUPABASE_BUCKET',
     );
-    if (config.USE_FAKE_MESSENGER === 'true')
-      throw new Error('Mensageiro falso exige SIMULATION_MODE=true');
   }
   for (const name of required) {
     const value = config[name];
