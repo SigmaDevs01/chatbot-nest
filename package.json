@@ -1,10 +1,21 @@
 {
-  "dependencies": {
-    "@nestjs/axios": "^12.0.1",
-    "@nestjs/config": "^12.0.1",
-    "@whiskeysockets/baileys": "^7.0.0-rc14",
-    "axios": "^1.20.0",
-    "pino": "^10.4.0",
-    "qrcode-terminal": "^0.12.0"
+  "name": "chatbot-nest",
+  "private": true,
+  "workspaces": [
+    "whatsapp-bot"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build --workspace whatsapp",
+    "start": "npm run start --workspace whatsapp",
+    "start:dev": "npm run start:dev --workspace whatsapp",
+    "start:prod": "npm run start:prod --workspace whatsapp",
+    "simulate": "npm run simulate --workspace whatsapp",
+    "lint": "npm run lint --workspace whatsapp",
+    "test": "npm run test --workspace whatsapp -- --runInBand",
+    "test:e2e": "npm run test:e2e --workspace whatsapp -- --runInBand",
+    "typecheck": "npm run typecheck --workspace whatsapp"
   }
 }

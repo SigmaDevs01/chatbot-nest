@@ -1,0 +1,20 @@
+# Redis local de apoio. Os demais serviços são configurados externamente.
+services:
+  redis:
+    image: redis:7.4-alpine
+    # AOF + fsync por gravação reduzem a perda de estado; noeviction evita remoção silenciosa.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "always", "--maxmemory-policy", "noeviction"]
+    # Acesso restrito ao próprio computador; não publica Redis em todas as interfaces.
+    ports:
+      - "127.0.0.1:6379:6379"
+    # Mantém os dados quando o contêiner é recriado.
+    volumes:
+      - redis-data:/data
+    # Verifica somente o Redis, não a saúde da aplicação NestJS.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+volumes:
+  redis-data:

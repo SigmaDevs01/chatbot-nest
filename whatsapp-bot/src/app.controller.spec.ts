@@ -1,3 +1,4 @@
+/** Teste legado do scaffold. Não comprova existência da rota / na aplicação real. */
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';

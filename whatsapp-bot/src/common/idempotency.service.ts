@@ -1,50 +1,48 @@
-// src/common/idempotency.service.ts
 import { Injectable } from '@nestjs/common';
-
+import { StateService } from './state.service';
+/** Resposta já calculada e confirmação local de entrega ao provedor. */
+interface Delivery {
+  reply: string;
+  sent: boolean;
+}
+/** Janela de deduplicação: mensagens mais antigas podem ser processadas novamente. */
+const TTL_MS = 24 * 60 * 60 * 1000;
 /**
- * Serviço de Idempotência (IdempotencyService).
- * 
- * Finalidade:
- * Evitar que a mesma mensagem do WhatsApp seja processada mais de uma vez.
- * Webhooks da Evolution API ou instabilidades de rede podem reenviar o mesmo evento
- * repetidas vezes (retries automáticos).
- * 
- * Funcionamento:
- * Mantém um cache em memória com os IDs de mensagens recebidas nos últimos 10 minutos (TTL).
- * Mensagens expiradas são removidas automaticamente da memória para evitar vazamento de memória (memory leak).
+ * Coordena processamento e entrega sem avançar duas vezes uma etapa em retries.
+ * Uma resposta pendente é reutilizada; uma entrega marcada como enviada é ignorada.
+ * O provedor ainda pode duplicar a mensagem se aceitar o envio e perder o ACK.
  */
 @Injectable()
 export class IdempotencyService {
-    /** Armazena o ID da mensagem e o timestamp (em ms) de quando ela foi recebida */
-    private seen = new Map<string, number>();
-
-    /** Tempo de vida do registro no cache: 10 minutos em milissegundos */
-    private readonly ttlMs = 10 * 60 * 1000;
-
-    /**
-     * Verifica se a mensagem já foi processada anteriormente.
-     * 
-     * @param id - Identificador único da mensagem no WhatsApp (ex.: "3EB0...").
-     * @returns `true` se a mensagem for duplicada (já foi vista dentro do TTL);
-     *          `false` se for inédita (registra o ID no cache e permite o fluxo).
-     */
-    isDuplicate(id: string): boolean {
-        const now = Date.now();
-
-        // Limpeza periódica: remove chaves cujo tempo expirou
-        for (const [k, t] of this.seen) {
-            if (now - t > this.ttlMs) {
-                this.seen.delete(k);
-            }
-        }
-
-        // Se o ID já estiver registrado, é duplicada
-        if (this.seen.has(id)) {
-            return true;
-        }
-
-        // Primeira vez que vemos esse ID: registra com o timestamp atual
-        this.seen.set(id, now);
-        return false;
-    }
+  constructor(private readonly state: StateService) {}
+  /**
+   * @param user Identificador composto por instância Evolution e telefone.
+   * @param id ID original da mensagem; deve permanecer igual em um retry.
+   * @param process Calcula a resposta e atualiza a sessão dentro da transação.
+   * @param send Envia a resposta persistida para o WhatsApp.
+   */
+  async deliver(
+    user: string,
+    id: string,
+    process: () => Promise<string>,
+    send: (reply: string) => Promise<void>,
+  ) {
+    return this.state.withLock(`user:${user}`, async () => {
+      const key = `delivery:${user}:${id}`;
+      let delivery = await this.state.get<Delivery>(key);
+      if (delivery?.sent) return { duplicate: true };
+      if (!delivery) {
+        delivery = await this.state.transaction(async () => {
+          const pending = { reply: await process(), sent: false };
+          await this.state.set(key, pending, TTL_MS);
+          return pending;
+        });
+      }
+      // Só envia depois de persistir sessão + resposta. Se falhar, sent continua false.
+      // O webhook retorna erro para permitir que a Evolution repita o mesmo ID.
+      await send(delivery.reply);
+      await this.state.set(key, { ...delivery, sent: true }, TTL_MS);
+      return { ok: true };
+    });
+  }
 }

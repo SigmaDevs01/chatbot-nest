@@ -1,11 +1,12 @@
 // src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { validateConfig } from './config';
 import { WebhookModule } from './webhook/webhook.module';
 
 /**
  * Módulo Raiz da Aplicação (AppModule).
- * 
+ *
  * Responsabilidades:
  * 1. ConfigModule.forRoot: Carrega as variáveis de ambiente do arquivo .env
  *    e as disponibiliza globalmente em qualquer serviço via ConfigService (isGlobal: true).
@@ -14,8 +15,8 @@ import { WebhookModule } from './webhook/webhook.module';
  */
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateConfig }),
     WebhookModule,
   ],
 })
-export class AppModule { }
+export class AppModule {}

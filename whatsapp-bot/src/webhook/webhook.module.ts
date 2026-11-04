@@ -8,17 +8,17 @@ import { ConversationModule } from '../conversation/conversation.module';
 
 /**
  * Módulo de Webhook (WebhookModule).
- * 
+ *
  * Agrupa o controller e guard responsáveis pela recepção das mensagens do WhatsApp.
- * 
+ *
  * Importações:
  * - MessagingModule: Para injetar o provedor de envio de respostas (MESSENGER).
  * - CommonModule: Para injetar o IdempotencyService (anti-duplicação).
  * - ConversationModule: Para conectar o fluxo conversacional da máquina de estados.
  */
 @Module({
-    imports: [MessagingModule, CommonModule, ConversationModule],
-    controllers: [WebhookController],
-    providers: [WebhookGuard],
+  imports: [MessagingModule, CommonModule, ConversationModule],
+  controllers: [WebhookController],
+  providers: [WebhookGuard],
 })
-export class WebhookModule { }
+export class WebhookModule {}

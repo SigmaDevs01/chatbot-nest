@@ -9,9 +9,11 @@ import { AppModule } from './app.module';
  */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const port = process.env.PORT ?? 3001;
+  // Permite aos providers liberar a conexão Redis e os timers no encerramento.
+  app.enableShutdownHooks();
+  const port = Number(process.env.PORT ?? 3001);
   await app.listen(port);
   console.log(`🚀 Bot WhatsApp iniciado e ouvindo na porta ${port}`);
 }
 
-bootstrap();
+void bootstrap();

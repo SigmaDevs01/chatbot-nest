@@ -1,98 +1,61 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Bot de denúncias por WhatsApp
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS com Evolution API, backend HTTP e Supabase Storage. A conversa coleta categoria, descrição, endereço, localização opcional e até cinco imagens.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Consulte também o [guia completo da Sigma Devs](../docs/README.md), com arquitetura, configuração, contratos, operação e mapa do código.
 
-## Description
+## Instalação e simulação
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Requer Node.js 22 ou superior com npm. Execute na **raiz do repositório**, que usa npm workspaces e um único package-lock.json:
 
-## Project setup
-
-```bash
-$ npm install
+```powershell
+npm ci
+Copy-Item whatsapp-bot/.env.example whatsapp-bot/.env
+npm run start:dev
 ```
 
-## Compile and run the project
+Em outro terminal, na mesma raiz:
 
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+```powershell
+npm run simulate
 ```
 
-## Run tests
+O simulador carrega `whatsapp-bot/.env`. Digite `oi` para começar e siga as perguntas. `/loc -23.55 -46.63` envia localização, `/foto` simula imagem e `/sair` encerra. `voltar` retorna uma etapa e `cancelar` encerra a denúncia.
 
-```bash
-# unit tests
-$ npm run test
+Com `SIMULATION_MODE=true`, mensagens aparecem no console, fotos usam URLs fictícias e o backend não é chamado. A conclusão informa claramente que nenhuma denúncia foi registrada. Sem REDIS_URL, o estado é temporário e limitado a um processo. O modo de simulação é recusado quando NODE_ENV=production.
 
-# e2e tests
-$ npm run test:e2e
+## Modo real
 
-# test coverage
-$ npm run test:cov
+1. Defina `SIMULATION_MODE=false` e preencha todas as variáveis do `.env.example`. A aplicação valida os campos na inicialização. USE_FAKE_MESSENGER é uma opção antiga; não a utilize no modo real.
+2. Para Redis local: `docker compose -f whatsapp-bot/docker-compose.yml up -d` e `REDIS_URL=redis://localhost:6379`. O compose fornece apenas Redis; Evolution, backend e Supabase são serviços externos.
+3. Todas as réplicas do bot devem usar o mesmo Redis e EVOLUTION_INSTANCE. Cada implantação atende uma instância Evolution. Sessões expiram após 30 minutos; respostas para deduplicação são mantidas por 24 horas. O Redis precisa de persistência e política noeviction. A perda dos dados do Redis também perde essas garantias.
+4. Na Evolution, configure eventos `messages.upsert` para `POST https://seu-bot/webhook` e o cabeçalho `x-webhook-token` com o mesmo WEBHOOK_TOKEN. Use um segredo forte e HTTPS. O parser aceita conversas diretas com JID numérico `@s.whatsapp.net`; grupos e endereçamento `@lid` não são suportados nesta versão.
+5. A integração de mídia usa `POST /chat/getBase64FromMediaMessage/{instance}` com a chave da mensagem. Imagens JPEG/PNG/WebP são baixadas pela API autenticada, têm tamanho limitado a 5 MB e assinatura básica de arquivo verificada antes do upload. Vídeos e documentos são recusados. Os caminhos de upload são determinísticos para permitir repetição sem multiplicar arquivos.
+6. Configure o bucket Supabase. O contrato atual do backend espera **URLs públicas**: o bucket deve ser público e as imagens poderão ser vistas por quem tiver o link. Os caminhos não contêm telefone. Para denúncias com anexos confidenciais, altere também o contrato do backend para objetos privados/URLs assinadas antes de usar dados reais. Credenciais service_role ficam somente no servidor.
+
+## Contrato do backend e tentativas
+
+`POST {BACKEND_URL}/bot/complaints`, com `x-bot-key`, corpo `{ category, description, address, latitude?, longitude?, photos: string[], origem: "whatsapp", telefone }` e resposta `{ "id": "protocolo" }`.
+
+O bot só confirma o registro após receber um protocolo válido. Erros mantêm o rascunho; `sim` tenta novamente e `voltar` permite corrigir dados. O backend recebe `Idempotency-Key`, estável para o mesmo rascunho e payload. **O backend precisa implementar esse cabeçalho atomicamente**: salvar chave, payload e resultado e devolver o mesmo protocolo em repetições. Sem esse suporte, um timeout após criar a denúncia pode gerar registro duplicado. O código do backend não faz parte deste repositório.
+
+Mensagens por usuário são serializadas com bloqueio compartilhado. A nova sessão e a resposta ficam gravadas atomicamente antes do envio ao WhatsApp. Se o envio falhar, o endpoint devolve erro e uma repetição do mesmo webhook reenvia a resposta salva sem executar a etapa novamente. Configure retries na Evolution. Se o provedor aceitar um envio mas a conexão cair antes da confirmação, uma resposta poderá chegar repetida: não há garantia de entrega exatamente uma vez no provedor. O webhook processa uma mensagem por payload e depende do ordenamento de chegada do provedor.
+
+Fotos são enviadas ao armazenamento ao serem recebidas. Cancelamentos e sessões expiradas podem deixar anexos sem denúncia; configure retenção e limpeza de arquivos órfãos no armazenamento conforme a política do sistema.
+
+## Validação e execução
+
+```powershell
+npm run build
+npm run typecheck
+npm test
+npm run test:e2e
+npm run lint
+npm run start:prod
 ```
 
-## Deployment
+Os testes automatizados cobrem o fluxo, confirmação, retorno de etapas, falhas de backend/upload/envio, repetição de webhook, concorrência, limites de fotos, validação de payload e expiração. Integrações externas reais exigem credenciais e homologação. O bot não usa IA: as perguntas e validações são uma máquina de estados.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Referências: [Evolution Get Base64](https://docs.evoapicloud.com/api-reference/chat-controller/get-base64), [Redis Node.js](https://redis.io/docs/latest/develop/clients/nodejs/connect/).
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Com carinho, **Sigma Devs**.

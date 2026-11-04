@@ -5,13 +5,13 @@ import { BackendClient } from './backend.client';
 
 /**
  * Módulo de Integração com o Backend (BackendModule).
- * 
+ *
  * Configura o cliente HTTP e exporta o `BackendClient` para ser consumido
  * pelo `ConversationService` quando o usuário conclui o registro da denúncia.
  */
 @Module({
-    imports: [HttpModule],
-    providers: [BackendClient],
-    exports: [BackendClient],
+  imports: [HttpModule],
+  providers: [BackendClient],
+  exports: [BackendClient],
 })
-export class BackendModule { }
+export class BackendModule {}

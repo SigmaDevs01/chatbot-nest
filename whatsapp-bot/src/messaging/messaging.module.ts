@@ -8,26 +8,29 @@ import { EvolutionClient } from './evolution.client';
 
 /**
  * Módulo de Mensageria (MessagingModule).
- * 
+ *
  * Responsabilidades:
  * - Configura e fornece o serviço de saída de mensagens.
  * - Utiliza uma Factory (`useFactory`) para decidir dinamicamente em tempo de inicialização:
- *   - Se `USE_FAKE_MESSENGER === 'true'`: provê o `ConsoleMessenger` (simulação no terminal).
+ *   - Se `SIMULATION_MODE === 'true'`: provê o `ConsoleMessenger` (simulação no terminal).
  *   - Caso contrário: provê o `EvolutionClient` (disparo real pelo WhatsApp).
  * - Exporta o token `MESSENGER` para que qualquer módulo possa injetar `@Inject(MESSENGER)`.
  */
 @Module({
-    imports: [HttpModule],
-    providers: [
-        ConsoleMessenger,
-        EvolutionClient,
-        {
-            provide: MESSENGER,
-            inject: [ConfigService, ConsoleMessenger, EvolutionClient],
-            useFactory: (config: ConfigService, fake: ConsoleMessenger, real: EvolutionClient) =>
-                config.get('USE_FAKE_MESSENGER') === 'true' ? fake : real,
-        },
-    ],
-    exports: [MESSENGER],
+  imports: [HttpModule],
+  providers: [
+    ConsoleMessenger,
+    EvolutionClient,
+    {
+      provide: MESSENGER,
+      inject: [ConfigService, ConsoleMessenger, EvolutionClient],
+      useFactory: (
+        config: ConfigService,
+        fake: ConsoleMessenger,
+        real: EvolutionClient,
+      ) => (config.get('SIMULATION_MODE') === 'true' ? fake : real),
+    },
+  ],
+  exports: [MESSENGER, EvolutionClient],
 })
-export class MessagingModule { }
+export class MessagingModule {}

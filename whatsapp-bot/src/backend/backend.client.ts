@@ -1,51 +1,64 @@
-// src/backend/backend.client.ts
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
-import { AxiosError } from 'axios';
+import { isAxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { BackendError } from './backend.error';
 import { CreateComplaintPayload } from './dto/create-complaint.payload';
-
-/**
- * Cliente HTTP para a API Central de Denúncias (BackendClient).
- * 
- * Responsável por despachar os chamados montados pelo bot para o sistema de gestão
- * da ouvidoria/prefeitura.
- */
+/** Único cliente de criação de denúncias; concentra autenticação e contrato HTTP. */
 @Injectable()
 export class BackendClient {
-    constructor(
-        private readonly http: HttpService,
-        private readonly config: ConfigService,
-    ) { }
-
-    /**
-     * Envia o chamado formatado via POST para a rota `/bot/complaints`.
-     * 
-     * @param payload - Objeto com categoria, descrição, endereço, fotos, etc.
-     * @returns Objeto com o identificador/protocolo gerado (ex.: `{ id: "DEN-2026-0042" }`).
-     * @throws `BackendError` com o status HTTP e a mensagem detalhada em caso de falha.
-     */
-    async createComplaint(payload: CreateComplaintPayload): Promise<{ id: string }> {
-        try {
-            const res = await firstValueFrom(
-                this.http.post(`${this.config.get<string>('BACKEND_URL')}/bot/complaints`, payload, {
-                    headers: { 'x-bot-key': this.config.get<string>('BOT_API_KEY') },
-                    timeout: 15000, // Timeout de 15 segundos
-                }),
-            );
-            return res.data;
-        } catch (e) {
-            const err = e as AxiosError<any>;
-            const msg = err.response?.data?.message;
-
-            // Formata array de erros de validação (ex: class-validator) em linhas legíveis
-            const formattedMessage = Array.isArray(msg)
-                ? msg.join('\n')
-                : String(msg ?? err.message);
-
-            throw new BackendError(err.response?.status, formattedMessage);
-        }
+  constructor(
+    private readonly http: HttpService,
+    private readonly config: ConfigService,
+  ) {}
+  /**
+   * Envia um rascunho validado e só aceita sucesso com protocolo não vazio.
+   * O backend deve implementar Idempotency-Key: enviar o cabeçalho, sozinho,
+   * não evita duplicações quando a resposta HTTP se perde após a criação.
+   * A simulação retorna uma referência identificada sem fazer chamada externa.
+   * @throws BackendError com status e detalhes úteis para correção/reenvio.
+   */
+  async createComplaint(
+    payload: CreateComplaintPayload,
+    idempotencyKey: string,
+  ): Promise<{ id: string }> {
+    if (this.config.get('SIMULATION_MODE') === 'true')
+      return { id: `SIMULADO-${idempotencyKey.slice(0, 12)}` };
+    try {
+      const res = await firstValueFrom(
+        this.http.post<unknown>(
+          `${this.config.getOrThrow<string>('BACKEND_URL').replace(/\/$/, '')}/bot/complaints`,
+          payload,
+          {
+            headers: {
+              'x-bot-key': this.config.getOrThrow<string>('BOT_API_KEY'),
+              'Idempotency-Key': idempotencyKey,
+            },
+            timeout: 15000,
+          },
+        ),
+      );
+      // Tipos TypeScript não garantem que a resposta externa respeita o contrato.
+      const data = res.data as { id?: unknown } | null;
+      if (!data || typeof data.id !== 'string' || !data.id.trim())
+        throw new BackendError(
+          undefined,
+          'Backend não retornou protocolo válido',
+        );
+      return { id: data.id };
+    } catch (e) {
+      if (e instanceof BackendError) throw e;
+      if (!isAxiosError<{ message?: unknown }>(e))
+        throw new BackendError(undefined, 'Falha na comunicação com o backend');
+      const msg = e.response?.data?.message;
+      // Mensagens de validação podem ser uma string ou uma lista de strings.
+      const details = Array.isArray(msg)
+        ? msg.filter((v): v is string => typeof v === 'string').join('\n')
+        : typeof msg === 'string'
+          ? msg
+          : 'Falha na comunicação com o backend';
+      throw new BackendError(e.response?.status, details);
     }
+  }
 }

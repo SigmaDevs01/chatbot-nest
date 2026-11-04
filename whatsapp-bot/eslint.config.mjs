@@ -4,6 +4,7 @@ import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended'
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+// Regras com informação de tipos e estilo compartilhado para aplicação e testes.
 export default tseslint.config(
   {
     ignores: ['eslint.config.mjs'],
@@ -17,8 +18,10 @@ export default tseslint.config(
         ...globals.node,
         ...globals.jest,
       },
+      // Alinhado ao pacote atual, que não declara type=module.
       sourceType: 'commonjs',
       parserOptions: {
+        // Reutiliza o tsconfig para analisar usos inseguros de tipos.
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },

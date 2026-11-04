@@ -1,33 +1,29 @@
-// src/webhook/webhook.guard.ts
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-
-/**
- * Guard de Segurança do Webhook (WebhookGuard).
- * 
- * Protege a rota pública `/webhook` contra requisições não autorizadas ou ataques externos.
- * Exige que a Evolution API envie o token secreto no cabeçalho HTTP `x-webhook-token`.
- */
+import { timingSafeEqual } from 'crypto';
+import type { Request } from 'express';
+/** Exige o segredo compartilhado no cabeçalho antes de processar qualquer evento. */
 @Injectable()
 export class WebhookGuard implements CanActivate {
-    constructor(private readonly config: ConfigService) { }
-
-    /**
-     * Valida a requisição antes que ela chegue ao controlador.
-     * 
-     * @param ctx - Contexto de execução do NestJS (contém a requisição HTTP).
-     * @returns `true` se o token do cabeçalho for idêntico à variável WEBHOOK_TOKEN.
-     * @throws `UnauthorizedException` (HTTP 401) se o token for ausente ou incorreto.
-     */
-    canActivate(ctx: ExecutionContext): boolean {
-        const req = ctx.switchToHttp().getRequest();
-        const incomingToken = req.headers['x-webhook-token'];
-        const expectedToken = this.config.get<string>('WEBHOOK_TOKEN');
-
-        if (!incomingToken || incomingToken !== expectedToken) {
-            throw new UnauthorizedException('Token de autenticação do webhook inválido ou ausente');
-        }
-
-        return true;
-    }
+  constructor(private readonly config: ConfigService) {}
+  /** Recusa cabeçalho ausente/múltiplo; compara buffers de mesmo tamanho em tempo constante. */
+  canActivate(ctx: ExecutionContext): boolean {
+    const incoming = ctx.switchToHttp().getRequest<Request>().headers[
+      'x-webhook-token'
+    ];
+    const expected = this.config.get<string>('WEBHOOK_TOKEN');
+    if (typeof incoming !== 'string' || !expected)
+      throw new UnauthorizedException('Token inválido ou ausente');
+    // timingSafeEqual exige buffers de comprimentos iguais; conferir antes evita exceção.
+    const a = Buffer.from(incoming),
+      b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b))
+      throw new UnauthorizedException('Token inválido ou ausente');
+    return true;
+  }
 }

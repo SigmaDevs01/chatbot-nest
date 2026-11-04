@@ -10,16 +10,16 @@ import { confirmacaoStep } from './confirmacao.step';
 
 /**
  * Registro e Dicionário de todos os passos (`STEPS`).
- * 
+ *
  * Mapeia cada `StepName` ('CATEGORIA', 'DESCRICAO', etc.) para a sua respectiva implementação `Step`.
  * Permite ao `ConversationService` executar `STEPS[session.step].handle(msg, session)`
  * de forma polimórfica e dinâmica, sem encadeamentos gigantescos de `if/else`.
  */
 export const STEPS: Record<StepName, Step> = {
-    CATEGORIA: categoriaStep,
-    DESCRICAO: descricaoStep,
-    ENDERECO: enderecoStep,
-    COORDENADAS: coordenadasStep,
-    FOTOS: fotosStep,
-    CONFIRMACAO: confirmacaoStep,
+  CATEGORIA: categoriaStep,
+  DESCRICAO: descricaoStep,
+  ENDERECO: enderecoStep,
+  COORDENADAS: coordenadasStep,
+  FOTOS: fotosStep,
+  CONFIRMACAO: confirmacaoStep,
 };

@@ -1,15 +1,11 @@
-// src/storage/storage.module.ts
 import { Module } from '@nestjs/common';
+import { MessagingModule } from '../messaging/messaging.module';
 import { StorageService } from './storage.service';
-
-/**
- * Módulo de Armazenamento (StorageModule).
- * 
- * Fornece e exporta o `StorageService` para upload de fotos no Supabase.
- * Pode ser importado pelo `ConversationModule` para gerar URLs de mídias enviadas.
- */
+import { PhotoService } from './photo.service';
+/** Expõe PhotoService; detalhes do Supabase ficam encapsulados no módulo. */
 @Module({
-  providers: [StorageService],
-  exports: [StorageService],
+  imports: [MessagingModule],
+  providers: [StorageService, PhotoService],
+  exports: [PhotoService],
 })
 export class StorageModule {}
