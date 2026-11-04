@@ -151,7 +151,7 @@ export class ConversationService {
           const { id } = await this.backend.createComplaint(payload, key);
           // A exclusão só será efetivada junto com a resposta na transação do webhook.
           await this.store.delete(msg.from);
-          return this.config.get('SIMULATION_MODE') === 'true'
+          return this.config.get('SIMULATION_MODE') === 'true' && !this.config.get('BACKEND_URL')
             ? `🧪 Simulação concluída. Nenhuma denúncia foi registrada. Referência: ${id}`
             : messages.finished(id);
         } catch (error) {

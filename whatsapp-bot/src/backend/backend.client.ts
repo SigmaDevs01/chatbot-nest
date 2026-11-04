@@ -23,7 +23,7 @@ export class BackendClient {
     payload: CreateComplaintPayload,
     idempotencyKey: string,
   ): Promise<{ id: string }> {
-    if (this.config.get('SIMULATION_MODE') === 'true')
+    if (this.config.get('SIMULATION_MODE') === 'true' && !this.config.get('BACKEND_URL'))
       return { id: `SIMULADO-${idempotencyKey.slice(0, 12)}` };
     try {
       const res = await firstValueFrom(
